@@ -1,0 +1,55 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_HUB_REPO = 'docin82/keda-bot'
+        GITOPS_REPO = 'https://github.com/goncharukinna/bots-gitops.git'
+        GITOPS_PATH = 'manifests/keda-bot/deployment.yaml'
+        // Имя секрета в Jenkins, где хранятся твои креды от GitHub (Personal Access Token)
+        GIT_CREDENTIALS_ID = 'github-token' 
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                // Собираем образ с тегом, равным номеру сборки Jenkins
+                sh 'docker build -t $DOCKER_HUB_REPO:$BUILD_NUMBER .'
+                sh 'docker tag $DOCKER_HUB_REPO:$BUILD_NUMBER $DOCKER_HUB_REPO:latest'
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                // Используем креды Docker Hub (их нужно будет создать в Jenkins)
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    sh 'docker push $DOCKER_HUB_REPO:$BUILD_NUMBER'
+                    sh 'docker push $DOCKER_HUB_REPO:latest'
+                }
+            }
+        }
+
+        stage('Update GitOps Repo') {
+            steps {
+                withCredentials([string(credentialsId: "${GIT_CREDENTIALS_ID}", variable: 'GIT_TOKEN')]) {
+                    sh """
+                        git clone https://${GIT_TOKEN}@github.com/goncharukinna/bots-gitops.git
+                        cd bots-gitops
+                        sed -i "s|image: $DOCKER_HUB_REPO:.*|image: $DOCKER_HUB_REPO:$BUILD_NUMBER|" $GITOPS_PATH
+                        git config user.email "jenkins@example.com"
+                        git config user.name "Jenkins CI"
+                        git add $GITOPS_PATH
+                        git commit -m "Update keda-bot image to $BUILD_NUMBER [skip ci]"
+                        git push origin main
+                    """
+                }
+            }
+        }
+    }
+}
