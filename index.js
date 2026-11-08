@@ -81,6 +81,14 @@ bot.on('text', async (ctx) => {
 });
 
 // Запуск
-bot.launch();
+// Запуск бота с обработкой ошибок сети
+bot.launch().catch((err) => {
+    console.error('Ошибка запуска бота (сеть):', err.message);
+    console.log('Бот не может подключиться к Telegram. Ждем восстановления сети...');
+});
+
+// Обработка остановки
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
 connectRabbit();
 console.log('🤖 Support-bot запущен!');
