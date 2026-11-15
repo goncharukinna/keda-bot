@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ['$(JENKINS_SECRET)', '$(JENKINS_NAME)']
+    volumeMounts:
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+  - name: node
+    image: node:18-alpine
+    command: ['cat']
+    tty: true
+    volumeMounts:
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
+  - name: docker
+    image: docker:latest
+    command: ['cat']
+    tty: true
+    volumeMounts:
+    - mountPath: /var/run/docker.sock
+      name: docker-socket
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
+  - name: git
+    image: alpine/git:latest
+    command: ['cat']
+    tty: true
+    volumeMounts:
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
+  volumes:
+  - name: docker-socket
+    hostPath:
+      path: /var/run/docker.sock
+  - name: workspace-volume
+    emptyDir: {}
